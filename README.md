@@ -1,8 +1,8 @@
-#Projekt INC 2020
+# Projekt INC 2020
 
 Zadání **Vigenerova šifra** v souboru [projekt1_inp.pdf](https://github.com/tommilostny/INP_2020/blob/master/projekt1_inp.pdf).
 
-##How to build for FITkit/ISIM
+## How to build for FITkit/ISIM
 
 SVN checkout to FITkit repository
 
