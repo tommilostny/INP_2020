@@ -1,1 +1,0 @@
--intstyle "ise" -incremental -o "/home/tommilostny/FITkit-svn/apps/INP/inp-proj1/testbench_isim_beh.exe" -prj "/home/tommilostny/FITkit-svn/apps/INP/inp-proj1/testbench_beh.prj" "work.testbench" 
