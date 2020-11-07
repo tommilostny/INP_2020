@@ -27,11 +27,11 @@ type tKEY is array(0 to 1) of character;
 -- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 -- Sem doplnte svuj login:
 constant login_signal: tLOGIN := (
-    'X', 'B', 'I', 'D', 'L', 'O', '0', '1'
+    'X', 'M', 'I', 'L', 'O', 'S', '0', '2'
 );
 -- Sem doplnte klic (prvni dve pismena prijmeni bez diakritiky):
 constant key_signal: tKEY := (
-    'B', 'I'
+    'M', 'I'
 );
 -- !!!!!!!!! Ostatni casti tohoto kodu nemodifikujte !!!!!!!!!!!
 
