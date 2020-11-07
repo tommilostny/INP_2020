@@ -1,6 +1,6 @@
 Makefile
-_xmsgs/
-build/
+_xmsgs
+build
 vigenere_map.xrpt
 vigenere_par.xrpt
 xilinx_device_details.xml
