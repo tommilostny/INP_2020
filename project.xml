@@ -3,8 +3,8 @@
 
     <!--  Project description -->
     <name>Vigenèrova šifra</name>
-    <author>Michal Bidlo</author>
-    <authoremail>bidlom@fit.vut.cz</authoremail>
+    <author>Tomáš Milostný</author>
+    <authoremail>xmilos02@stud.fit.vut.cz</authoremail>
     <description>Simulace Vigenèrovy šifry ve VHDL</description>
 
     <!--  MCU part -->
