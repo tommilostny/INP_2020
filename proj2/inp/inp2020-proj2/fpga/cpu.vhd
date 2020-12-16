@@ -1,7 +1,7 @@
 -- cpu.vhd: Simple 8-bit CPU (BrainF*ck interpreter)
 -- Copyright (C) 2020 Brno University of Technology,
 --                    Faculty of Information Technology
--- Author(s): DOPLNIT
+-- Author(s): Tomáš Milostný
 --
 
 library ieee;
@@ -47,19 +47,215 @@ end cpu;
 --                      Architecture declaration
 -- ----------------------------------------------------------------------------
 architecture behavioral of cpu is
+    --PC
+    signal pc_register: std_logic_vector(11 downto 0);
+    signal pc_inc: std_logic;
+    signal pc_dec: std_logic;
+    signal pc_ld: std_logic;
 
- -- zde dopiste potrebne deklarace signalu
+    --PTR
+    signal ptr_register: std_logic_vector(9 downto 0);
+    signal ptr_inc: std_logic;
+    signal ptr_dec: std_logic;
 
+    --MX
+    signal mx_sel: std_logic_vector(1 downto 0) := (others => '0');
+    signal mx_out: std_logic_vector(7 downto 0) := (others => '0');
+
+    --FSM
+    type state_t is 
+    (
+        START, FETCH, DECODE,
+        EXEC_PTR_INC, EXEC_PTR_DEC,
+        EXEC_VALUE_INC1, EXEC_VALUE_INC2, EXEC_VALUE_INC3,
+        EXEC_VALUE_DEC1, EXEC_VALUE_DEC2, EXEC_VALUE_DEC3,
+        EXEC_WHILE_START, EXEC_WHILE_END,
+        EXEC_PUTCHAR, EXEC_GETCHAR,
+        EXEC_RETURN
+    );
+    signal state: state_t := START;
+    signal next_state: state_t;
 begin
 
- -- zde dopiste vlastni VHDL kod
+    ---- Program counter ----
+    pc : process( CLK, RESET, pc_inc, pc_dec, pc_ld )
+    begin
+        if ( RESET = '1' ) then
+            pc_register <= (others => '0');
+        elsif rising_edge(CLK) then
+            if ( pc_inc = '1' ) then
+                pc_register <= pc_register + 1;
+            elsif ( pc_dec = '1' ) then
+                pc_register <= pc_register - 1;
+            elsif ( pc_ld = '1' ) then
+                -- TODO :D
+            end if ;
+        end if ;
+    end process ; -- pc
+
+    CODE_ADDR <= pc_register;
+    ---- End of program counter ----
 
 
- -- pri tvorbe kodu reflektujte rady ze cviceni INP, zejmena mejte na pameti, ze 
- --   - nelze z vice procesu ovladat stejny signal,
- --   - je vhodne mit jeden proces pro popis jedne hardwarove komponenty, protoze pak
- --   - u synchronnich komponent obsahuje sensitivity list pouze CLK a RESET a 
- --   - u kombinacnich komponent obsahuje sensitivity list vsechny ctene signaly.
+    ---- Pointer ----
+    ptr : process( CLK, RESET, ptr_inc, ptr_dec )
+    begin
+        if ( RESET = '1' ) then
+            ptr_register <= (others => '0');
+        elsif rising_edge(CLK) then
+            if ( ptr_inc = '1' ) then
+                ptr_register <= ptr_register + 1;
+            elsif ( ptr_dec = '1' ) then
+                ptr_register <= ptr_register - 1;
+            end if ;
+        end if ;
+    end process ; -- ptr
+
+    DATA_ADDR <= ptr_register;
+    ---- End of pointer ----
+
+
+    ---- Multiplexer ----
+    mx : process( CLK, RESET, mx_sel )
+    begin
+        if ( RESET = '1' ) then
+            mx_out <= (others => '0');
+        elsif rising_edge(CLK) then
+            case( mx_sel ) is
+            
+                when "01" =>
+                    mx_out <= DATA_RDATA + 1;
+
+                when "10" =>
+                    mx_out <= DATA_RDATA - 1;
+            
+                when others =>
+                    mx_out <= IN_DATA;
+            
+            end case ;
+        end if ;
+    end process ; -- mx
+
+    DATA_WDATA <= mx_out;
+    ---- End of multiplexer ----
+
+
+    ---- Finite state machine logic ----
+    state_logic : process( CLK, RESET, EN )
+    begin
+        if ( RESET = '1' ) then
+            state <= START;
+        elsif ( rising_edge(CLK) and EN = '1' ) then
+            state <= next_state;
+        end if ;
+    end process ; -- state_logic
+
+    fsm_mealy : process( state, CODE_DATA, IN_VLD, OUT_BUSY, DATA_RDATA )
+    begin
+        -- Init entity
+        CODE_EN <= '0';
+        IN_REQ <= '0';
+        OUT_WE <= '0';
+        DATA_WE <= '0';
+        DATA_EN <= '0';
+
+        -- Init signals
+        pc_inc <= '0';
+        pc_dec <= '0';
+        pc_ld <= '0';
+        ptr_inc <= '0';
+        ptr_dec <= '0';
+
+        case( state ) is
+        
+            when START =>
+                next_state <= FETCH;
+
+            when FETCH =>
+                CODE_EN <= '1';
+                next_state <= DECODE;
+
+            when DECODE =>
+                case( CODE_DATA ) is
+                
+                    when 0x3E => -- >
+                        next_state <= EXEC_PTR_INC;
+
+                    when 0x3C => -- <
+                        next_state <= EXEC_PTR_DEC;
+
+                    when 0x2B => -- +
+                        next_state <= EXEC_VALUE_INC1;
+
+                    when 0x2D => -- -
+                        next_state <= EXEC_VALUE_DEC1;
+
+                    when 0x5B => -- [
+                        next_state <= EXEC_WHILE_START;
+
+                    when 0x5D => -- ]
+                        next_state <= EXEC_WHILE_END;
+
+                    when 0x2E => -- .
+                        next_state <= EXEC_PUTCHAR;
+
+                    when 0x2C => -- ,
+                        next_state <= EXEC_GETCHAR;
+
+                    when 0x00 => -- null
+                        next_state <= EXEC_RETURN;
+
+                    when others =>
+                        pc_inc <= '1';     
+                end case ; -- inside DECODE
+        
+            when EXEC_PTR_INC =>
+                ptr_inc <= '1';
+                pc_inc <= '1';
+                next_state <= FETCH;
+            
+            when EXEC_PTR_DEC =>
+                ptr_dec <= '1';
+                pc_inc <= '1';
+                next_state <= FETCH;
+            
+            when EXEC_VALUE_INC1 =>
+                DATA_EN <= '1';
+                DATA_WE <= '0'; -- read
+                next_state <= EXEC_VALUE_INC2;
+
+            when EXEC_VALUE_INC2 =>
+                mx_select <= "01"; -- set MX to increment DATA_RDATA
+                next_state <= EXEC_VALUE_INC3;
+
+            when EXEC_VALUE_INC3 =>
+                DATA_EN <= '1';
+                DATA_WE <= '1'; -- write
+                pc_inc <= '1';
+                next_state <= FETCH;
+
+            when EXEC_VALUE_DEC =>
+            
+            
+            when EXEC_WHILE_START =>
+            
+            
+            when EXEC_WHILE_END =>
+            
+            
+            when EXEC_PUTCHAR =>
+            
+            
+            when EXEC_GETCHAR =>
+            
+            
+            when EXEC_RETURN =>
+                
+
+            when others =>
+        
+        end case ;
+    end process ; -- fsm_mealy
+    ---- End of finite state machine logic ----
  
 end behavioral;
- 
