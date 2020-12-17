@@ -113,7 +113,7 @@ begin
       --  [6], [7], [8] , [0]- overeni korektni funkce vnorenych smycek, vstupu a vystupu
 
       -- [1] Vypis textu ABCDEFGHIJKL na displej 
-      INIT => "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.+.+.+.+.+.+.+.+.+.+.+." & nul
+      -- INIT => "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.+.+.+.+.+.+.+.+.+.+.+." & nul
 
       -- [2] Vypis textu AAAAA
       -- INIT => "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++><.>+<.>++<.>+++<.>+<." & nul
@@ -142,6 +142,9 @@ begin
 
       -- [9] Prevod binarniho cisla na ASCII (ocekava na klavesnici zadat 8-bitove binarni cislo, tj. stisk osmi klaves 0 / 1, pote vypise ASCII znak)
       -- INIT => ">,[>>>++++++++[<[<++>-]<+[>+<-]<-[-[-<]>]>[-<]<,>>>-]<.[-]<<]"
+
+      -- login xmilos02
+      INIT => "++++++++++[>+++++++++++++>++++++++++>+++++<<<-]>----------.>+++++++++.----.+++.+++.++++.>--.++." & nul
    )
    port map (
       CLK => CLK, 

@@ -37,7 +37,7 @@ proc isim_script {} {
 
    # Spusteni simulace
    # Delku simulace lze upravit dle potreb
-   run 20 ms
+   run 7 ms
 } 
 
 

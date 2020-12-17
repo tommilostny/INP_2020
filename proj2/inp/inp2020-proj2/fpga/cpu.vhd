@@ -53,14 +53,17 @@ architecture behavioral of cpu is
     signal pc_dec: std_logic;
     signal pc_ld: std_logic;
 
+    --RAS
+    signal ras_register: std_logic_vector(11 downto 0);
+
     --PTR
     signal ptr_register: std_logic_vector(9 downto 0);
     signal ptr_inc: std_logic;
     signal ptr_dec: std_logic;
 
     --MX
-    signal mx_sel: std_logic_vector(1 downto 0) := (others => '0');
-    signal mx_out: std_logic_vector(7 downto 0) := (others => '0');
+    signal mx_sel: std_logic_vector(1 downto 0);
+    signal mx_out: std_logic_vector(7 downto 0);
 
     --FSM
     type state_t is 
@@ -69,8 +72,9 @@ architecture behavioral of cpu is
         EXEC_PTR_INC, EXEC_PTR_DEC,
         EXEC_VALUE_INC1, EXEC_VALUE_INC2, EXEC_VALUE_INC3,
         EXEC_VALUE_DEC1, EXEC_VALUE_DEC2, EXEC_VALUE_DEC3,
-        EXEC_WHILE_START, EXEC_WHILE_END,
-        EXEC_PUTCHAR, EXEC_GETCHAR,
+        EXEC_WHILE_START, EXEC_WHILE_CHECK, EXEC_WHILE_LOOP, EXEC_WHILE_LOOP_EN, EXEC_WHILE_END,
+        EXEC_PUTCHAR1, EXEC_PUTCHAR2,
+        EXEC_GETCHAR1, EXEC_GETCHAR2,
         EXEC_RETURN
     );
     signal state: state_t := START;
@@ -88,7 +92,7 @@ begin
             elsif ( pc_dec = '1' ) then
                 pc_register <= pc_register - 1;
             elsif ( pc_ld = '1' ) then
-                -- TODO :D
+                pc_register <= ras_register;
             end if ;
         end if ;
     end process ; -- pc
@@ -150,16 +154,14 @@ begin
         end if ;
     end process ; -- state_logic
 
-    fsm_mealy : process( state, CODE_DATA, IN_VLD, OUT_BUSY, DATA_RDATA )
+    fsm_mealy : process( state, CODE_DATA, IN_VLD, OUT_BUSY, DATA_RDATA, pc_register )
     begin
-        -- Init entity
+        -- Init FSM outputs
         CODE_EN <= '0';
         IN_REQ <= '0';
         OUT_WE <= '0';
         DATA_WE <= '0';
         DATA_EN <= '0';
-
-        -- Init signals
         pc_inc <= '0';
         pc_dec <= '0';
         pc_ld <= '0';
@@ -178,36 +180,37 @@ begin
             when DECODE =>
                 case( CODE_DATA ) is
                 
-                    when 0x3E => -- >
+                    when x"3E" => -- >
                         next_state <= EXEC_PTR_INC;
 
-                    when 0x3C => -- <
+                    when x"3C" => -- <
                         next_state <= EXEC_PTR_DEC;
 
-                    when 0x2B => -- +
+                    when x"2B" => -- +
                         next_state <= EXEC_VALUE_INC1;
 
-                    when 0x2D => -- -
+                    when x"2D" => -- -
                         next_state <= EXEC_VALUE_DEC1;
 
-                    when 0x5B => -- [
+                    when x"5B" => -- [
                         next_state <= EXEC_WHILE_START;
 
-                    when 0x5D => -- ]
+                    when x"5D" => -- ]
                         next_state <= EXEC_WHILE_END;
 
-                    when 0x2E => -- .
-                        next_state <= EXEC_PUTCHAR;
+                    when x"2E" => -- .
+                        next_state <= EXEC_PUTCHAR1;
 
-                    when 0x2C => -- ,
-                        next_state <= EXEC_GETCHAR;
+                    when x"2C" => -- ,
+                        next_state <= EXEC_GETCHAR1;
 
-                    when 0x00 => -- null
+                    when x"00" => -- null
                         next_state <= EXEC_RETURN;
 
                     when others =>
-                        pc_inc <= '1';     
-                end case ; -- inside DECODE
+                        pc_inc <= '1';
+                        next_state <= FETCH;
+                end case ; -- when DECODE
         
             when EXEC_PTR_INC =>
                 ptr_inc <= '1';
@@ -225,7 +228,7 @@ begin
                 next_state <= EXEC_VALUE_INC2;
 
             when EXEC_VALUE_INC2 =>
-                mx_select <= "01"; -- set MX to increment DATA_RDATA
+                mx_sel <= "01"; -- set MX to increment DATA_RDATA
                 next_state <= EXEC_VALUE_INC3;
 
             when EXEC_VALUE_INC3 =>
@@ -234,25 +237,95 @@ begin
                 pc_inc <= '1';
                 next_state <= FETCH;
 
-            when EXEC_VALUE_DEC =>
-            
-            
+            when EXEC_VALUE_DEC1 =>
+                DATA_EN <= '1';
+                DATA_WE <= '0';
+                next_state <= EXEC_VALUE_DEC2;
+
+            when EXEC_VALUE_DEC2 =>
+                mx_sel <= "10"; -- set MX to decrement DATA_RDATA
+                next_state <= EXEC_VALUE_DEC3;
+
+            when EXEC_VALUE_DEC3 =>
+                DATA_EN <= '1';
+                DATA_WE <= '1';
+                pc_inc <= '1';
+                next_state <= FETCH;
+
             when EXEC_WHILE_START =>
-            
-            
+                pc_inc <= '1';
+                DATA_EN <= '1';
+                DATA_WE <= '0';
+                next_state <= EXEC_WHILE_CHECK;
+
+            when EXEC_WHILE_CHECK =>
+                if ( DATA_RDATA = "00000000" ) then
+                    CODE_EN <= '1';
+                    next_state <= EXEC_WHILE_LOOP;
+                else
+                    ras_register <= pc_register;
+                    next_state <= FETCH;
+                end if ;
+
+            when EXEC_WHILE_LOOP =>
+                if ( CODE_DATA = x"5D") then -- found end ']' ?
+                    ras_register <= "000000000000";
+                    next_state <= EXEC_WHILE_LOOP_EN;
+                else
+                    next_state <= FETCH;
+                end if ;
+                pc_inc <= '1';
+
+            when EXEC_WHILE_LOOP_EN =>
+                CODE_EN <= '1';
+                next_state <= EXEC_WHILE_LOOP;
+
             when EXEC_WHILE_END =>
+                if ( DATA_RDATA = "00000000" ) then
+                    pc_inc <= '1';
+                else
+                    pc_ld <= '1';
+                end if ;
+                next_state <= FETCH;
             
+            when EXEC_PUTCHAR1 =>
+                DATA_EN <= '1';
+                DATA_WE <= '0';
+                next_state <= EXEC_PUTCHAR2;
+
+            when EXEC_PUTCHAR2 =>
+                if ( OUT_BUSY = '1' ) then
+                    DATA_EN <= '1';
+                    DATA_WE <= '0';
+                else
+                    OUT_WE <= '1';
+                    OUT_DATA <= DATA_RDATA;
+                    pc_inc <= '1';
+                    next_state <= FETCH;
+                end if ;
             
-            when EXEC_PUTCHAR =>
-            
-            
-            when EXEC_GETCHAR =>
-            
+            when EXEC_GETCHAR1 =>
+                IN_REQ <= '1';
+                mx_sel <= "00"; -- set MX to read
+                next_state <= EXEC_GETCHAR2;
+
+            when EXEC_GETCHAR2 =>
+                if ( IN_VLD = '1' ) then
+                    DATA_EN <= '1';
+                    DATA_WE <= '1';
+                    pc_inc <= '1';
+                    next_state <= FETCH;
+                else
+                    IN_REQ <= '1';
+                    mx_sel <= "00";
+                end if ;
             
             when EXEC_RETURN =>
-                
+                next_state <= FETCH;
 
             when others =>
+                pc_inc <= '1';
+                next_state <= FETCH;
         
         end case ;
     end process ; -- fsm_mealy
