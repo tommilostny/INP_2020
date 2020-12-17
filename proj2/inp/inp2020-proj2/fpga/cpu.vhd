@@ -1,7 +1,7 @@
 -- cpu.vhd: Simple 8-bit CPU (BrainF*ck interpreter)
 -- Copyright (C) 2020 Brno University of Technology,
 --                    Faculty of Information Technology
--- Author(s): Tomáš Milostný
+-- Author(s): Tomáš Milostný (xmilos02)
 --
 
 library ieee;
@@ -72,20 +72,20 @@ architecture behavioral of cpu is
         EXEC_PTR_INC, EXEC_PTR_DEC,
         EXEC_VALUE_INC1, EXEC_VALUE_INC2, EXEC_VALUE_INC3,
         EXEC_VALUE_DEC1, EXEC_VALUE_DEC2, EXEC_VALUE_DEC3,
-        EXEC_WHILE_START, EXEC_WHILE_CHECK, EXEC_WHILE_LOOP, EXEC_WHILE_LOOP_EN, EXEC_WHILE_END,
+        EXEC_WHILE_START, EXEC_WHILE_CHECK, EXEC_WHILE_LOOP, EXEC_WHILE_END,
         EXEC_PUTCHAR1, EXEC_PUTCHAR2,
         EXEC_GETCHAR1, EXEC_GETCHAR2,
         EXEC_RETURN
     );
     signal state: state_t := START;
-    signal next_state: state_t;
+    signal next_state: state_t := FETCH;
 begin
 
     ---- Program counter ----
     pc : process( CLK, RESET, pc_inc, pc_dec, pc_ld )
     begin
         if ( RESET = '1' ) then
-            pc_register <= (others => '0');
+            pc_register <= "000000000000";
         elsif rising_edge(CLK) then
             if ( pc_inc = '1' ) then
                 pc_register <= pc_register + 1;
@@ -105,7 +105,7 @@ begin
     ptr : process( CLK, RESET, ptr_inc, ptr_dec )
     begin
         if ( RESET = '1' ) then
-            ptr_register <= (others => '0');
+            ptr_register <= "0000000000";
         elsif rising_edge(CLK) then
             if ( ptr_inc = '1' ) then
                 ptr_register <= ptr_register + 1;
@@ -123,19 +123,19 @@ begin
     mx : process( CLK, RESET, mx_sel )
     begin
         if ( RESET = '1' ) then
-            mx_out <= (others => '0');
+            mx_out <= "00000000";
         elsif rising_edge(CLK) then
             case( mx_sel ) is
-            
+
                 when "01" =>
                     mx_out <= DATA_RDATA + 1;
 
                 when "10" =>
                     mx_out <= DATA_RDATA - 1;
-            
+
                 when others =>
                     mx_out <= IN_DATA;
-            
+
             end case ;
         end if ;
     end process ; -- mx
@@ -154,7 +154,7 @@ begin
         end if ;
     end process ; -- state_logic
 
-    fsm_mealy : process( state, CODE_DATA, IN_VLD, OUT_BUSY, DATA_RDATA, pc_register )
+    fsm : process( state, CODE_DATA, IN_VLD, OUT_BUSY, DATA_RDATA, pc_register )
     begin
         -- Init FSM outputs
         CODE_EN <= '0';
@@ -169,7 +169,7 @@ begin
         ptr_dec <= '0';
 
         case( state ) is
-        
+
             when START =>
                 next_state <= FETCH;
 
@@ -211,17 +211,17 @@ begin
                         pc_inc <= '1';
                         next_state <= FETCH;
                 end case ; -- when DECODE
-        
+
             when EXEC_PTR_INC =>
                 ptr_inc <= '1';
                 pc_inc <= '1';
                 next_state <= FETCH;
-            
+
             when EXEC_PTR_DEC =>
                 ptr_dec <= '1';
                 pc_inc <= '1';
                 next_state <= FETCH;
-            
+
             when EXEC_VALUE_INC1 =>
                 DATA_EN <= '1';
                 DATA_WE <= '0'; -- read
@@ -270,15 +270,11 @@ begin
             when EXEC_WHILE_LOOP =>
                 if ( CODE_DATA = x"5D") then -- found end ']' ?
                     ras_register <= "000000000000";
-                    next_state <= EXEC_WHILE_LOOP_EN;
+                    CODE_EN <= '1';
                 else
                     next_state <= FETCH;
                 end if ;
                 pc_inc <= '1';
-
-            when EXEC_WHILE_LOOP_EN =>
-                CODE_EN <= '1';
-                next_state <= EXEC_WHILE_LOOP;
 
             when EXEC_WHILE_END =>
                 if ( DATA_RDATA = "00000000" ) then
@@ -287,7 +283,7 @@ begin
                     pc_ld <= '1';
                 end if ;
                 next_state <= FETCH;
-            
+
             when EXEC_PUTCHAR1 =>
                 DATA_EN <= '1';
                 DATA_WE <= '0';
@@ -303,7 +299,7 @@ begin
                     pc_inc <= '1';
                     next_state <= FETCH;
                 end if ;
-            
+
             when EXEC_GETCHAR1 =>
                 IN_REQ <= '1';
                 mx_sel <= "00"; -- set MX to read
@@ -319,14 +315,14 @@ begin
                     IN_REQ <= '1';
                     mx_sel <= "00";
                 end if ;
-            
+
             when EXEC_RETURN =>
-                next_state <= FETCH;
+                next_state <= EXEC_RETURN;
 
             when others =>
                 pc_inc <= '1';
                 next_state <= FETCH;
-        
+
         end case ;
     end process ; -- fsm_mealy
     ---- End of finite state machine logic ----
